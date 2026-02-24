@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Крестики-нолики с Ботом</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+
+        .controls {
+            margin: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        #field {
+            border-collapse: collapse;
+            background: white;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        #field td {
+            width: 80px;
+            height: 80px;
+            border: 2px solid #444;
+            text-align: center;
+            font-size: 40px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #field td:hover {
+            background-color: #f9f9f9;
+        }
+
+        #field td.taken {
+            cursor: not-allowed;
+        }
+
+        #message {
+            margin: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            min-height: 1.5em;
+        }
+
+        .win { color: #28a745; }
+        .lose { color: #dc3545; }
+
+        button {
+            padding: 8px 16px;
+            cursor: pointer;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+
+        select { padding: 7px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+    <h2>Крестики-нолики v2.0</h2>
+
+    <div class="controls">
+        Сложность: 
+        <select id="difficulty">
+            <option value="easy">Легкий (Случайный)</option>
+            <option value="hard">Сложный (Умный)</option>
+        </select>
+        <button id="reset">Начать заново</button>
+    </div>
+
+    <div id="message">Ваш ход (X)</div>
+    
+    <table id="field"></table>
+
+    <script>
+        const field = document.querySelector('#field');
+        const message = document.querySelector('#message');
+        const diffSelect = document.querySelector('#difficulty');
+        const resetBtn = document.querySelector('#reset');
+
+        let cells = [];
+        let isGameOver = false;
+        let movesCount = 0;
+
+        const combs = [
+            [0, 1, 2], [3, 4, 5], [6, 7, 8],
+            [0, 3, 6], [1, 4, 7], [2, 5, 8],
+            [0, 4, 8], [2, 4, 6]
+        ];
+
+        // 1. Инициализация игры
+        function init() {
+            field.innerHTML = '';
+            cells = [];
+            isGameOver = false;
+            movesCount = 0;
+            message.textContent = 'Ваш ход (X)';
+            message.className = '';
+
+            for (let i = 0; i < 3; i++) {
+                let tr = document.createElement('tr');
+                for (let j = 0; j < 3; j++) {
+                    let td = document.createElement('td');
+                    td.addEventListener('click', playerStep);
+                    tr.appendChild(td);
+                    cells.push(td);
+                }
+                field.appendChild(tr);
+            }
+        }
+
+        // 2. Ход игрока
+        function playerStep() {
+            if (isGameOver || this.textContent !== '') return;
+
+            executeMove(this, 'X');
+
+            if (!isGameOver && movesCount < 9) {
+                message.textContent = 'Бот думает...';
+                setTimeout(botStep, 400);
+            }
+        }
+
+        // 3. Логика бота
+        function botStep() {
+            if (isGameOver) return;
+
+            let target;
+            const mode = diffSelect.value;
+
+            if (mode === 'hard') {
+                target = findBestMove();
+            }
+
+            if (!target) {
+                let empty = cells.filter(c => c.textContent === '');
+                target = empty[Math.floor(Math.random() * empty.length)];
+            }
+
+            if (target) {
+                executeMove(target, 'O');
+                if (!isGameOver) message.textContent = 'Ваш ход (X)';
+            }
+        }
+
+        // 4. Общая функция хода
+        function executeMove(cell, symbol) {
+            cell.textContent = symbol;
+            cell.classList.add('taken');
+            movesCount++;
+
+            if (checkVictory()) {
+                isGameOver = true;
+                message.textContent = symbol === 'X' ? 'Вы победили!' : 'Бот победил!';
+                message.className = symbol === 'X' ? 'win' : 'lose';
+            } else if (movesCount === 9) {
+                isGameOver = true;
+                message.textContent = 'Ничья!';
+            }
+        }
+
+        // 5. Алгоритм поиска хода для "Hard"
+        function findBestMove() {
+            // Атака: ищем где бот может выиграть
+            let move = checkTwoOfThree('O');
+            if (move) return move;
+
+            // Защита: ищем где игрок может выиграть и мешаем
+            move = checkTwoOfThree('X');
+            if (move) return move;
+
+            // Центр: лучшая позиция
+            if (cells[4].textContent === '') return cells[4];
+
+            return null;
+        }
+
+        function checkTwoOfThree(symbol) {
+            for (let comb of combs) {
+                let values = comb.map(idx => cells[idx].textContent);
+                let count = values.filter(v => v === symbol).length;
+                let empty = values.filter(v => v === '').length;
+
+                if (count === 2 && empty === 1) {
+                    return cells[comb[values.indexOf('')]];
+                }
+            }
+            return null;
+        }
+
+        function checkVictory() {
+            return combs.some(comb => {
+                return cells[comb[0]].textContent !== '' &&
+                       cells[comb[0]].textContent === cells[comb[1]].textContent &&
+                       cells[comb[1]].textContent === cells[comb[2]].textContent;
+            });
+        }
+
+        resetBtn.addEventListener('click', init);
+        init(); // Запуск при загрузке
+    </script>
+</body>
+</html>
